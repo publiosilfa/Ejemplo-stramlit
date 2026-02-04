@@ -6,10 +6,8 @@ DB = "estadoshp.db"
 
 st.set_page_config(page_title="Dashboard Proporcional", layout="wide")
 
-# =======================
-# BASE DE DATOS (SQLite)
-# =======================
 
+# ---------- DB ----------
 def conn_db():
     return sqlite3.connect(DB, check_same_thread=False)
 
@@ -33,7 +31,8 @@ def cargar_df():
         )
     if df.empty:
         df = pd.DataFrame(columns=["Nombre", "Estado"])
-    df["Estado"] = pd.to_numeric(df["Estado"], errors="coerce").fillna(0.0)
+    df["Nombre"] = df["Nombre"].astype(str)
+    df["Estado"] = pd.to_numeric(df["Estado"], errors="coerce").fillna(0.0).astype(float)
     return df.sort_values(by="Estado", ascending=False).reset_index(drop=True)
 
 def upsert_estado(nombre, estado):
@@ -58,28 +57,11 @@ def reset_all():
         cur.execute("UPDATE estados SET estado=0")
         conn.commit()
 
-def reemplazar_todo(df_edit: pd.DataFrame):
-    df_edit = df_edit.copy()
-    df_edit["Nombre"] = df_edit["Nombre"].astype(str).str.strip()
-    df_edit["Estado"] = pd.to_numeric(df_edit["Estado"], errors="coerce").fillna(0.0)
-    df_edit = df_edit[df_edit["Nombre"] != ""]
-    df_edit = df_edit.drop_duplicates(subset=["Nombre"], keep="last")
 
-    with conn_db() as conn:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM estados")
-        cur.executemany(
-            "INSERT INTO estados (nombre, estado) VALUES (?, ?)",
-            list(df_edit[["Nombre", "Estado"]].itertuples(index=False, name=None))
-        )
-        conn.commit()
-
-# =======================
-# UI helpers
-# =======================
-
+# ---------- UI helpers ----------
 def barra_html(estado, maximo):
-    pct = 0 if maximo == 0 else max(0, min(estado / maximo, 1))
+    # proporcional al máximo (igual que tu lógica original)
+    pct = 0.0 if maximo == 0 else max(0.0, min(estado / maximo, 1.0))
     width = int(pct * 100)
 
     if estado > 0:
@@ -95,10 +77,8 @@ def barra_html(estado, maximo):
     </div>
     """
 
-# =======================
-# APP
-# =======================
 
+# ---------- START ----------
 init_db()
 
 st.title("Dashboard Proporcional (SQLite)")
@@ -117,23 +97,9 @@ with t3:
 st.divider()
 
 df = cargar_df()
+maximo = float(df["Estado"].max()) if len(df) else 0.0
 
-# ---- Ver / editar base completa ----
-with st.expander("🗄️ Editar base completa (SQLite)"):
-    df_edit = st.data_editor(
-        df,
-        use_container_width=True,
-        num_rows="dynamic",
-        hide_index=True
-    )
-    if st.button("💾 Guardar edición en la base", use_container_width=True):
-        reemplazar_todo(df_edit)
-        st.success("Base actualizada correctamente.")
-        st.rerun()
-
-maximo = df["Estado"].max() if len(df) else 0
-
-# ---- Encabezados ----
+# encabezados
 h = st.columns([2.2, 1.2, 2.2, 2.2, 1.2, 1.2])
 h[0].markdown("**Nombre**")
 h[1].markdown("**Estado**")
@@ -144,7 +110,7 @@ h[5].markdown("**Borrar**")
 
 st.write("")
 
-# ---- Filas ----
+# filas
 for _, row in df.iterrows():
     nombre = row["Nombre"]
     estado = float(row["Estado"])
@@ -161,18 +127,18 @@ for _, row in df.iterrows():
 
     c3.markdown(barra_html(estado, maximo), unsafe_allow_html=True)
 
-    # ✅ FORM: el input se limpia automáticamente al aplicar
-    with c4.form(key=f"form_{nombre}", clear_on_submit=True):
-        delta = st.number_input(
-            "",
-            value=0.0,
-            step=1.0,
-            format="%.2f",
-            label_visibility="collapsed",
-        )
-        aplicar = st.form_submit_button("Aplicar")
+    # ✅ number_input: teclado numérico real en iOS
+    delta = c4.number_input(
+        "",
+        value=0.0,
+        step=1.0,
+        key=f"delta_{nombre}",
+        label_visibility="collapsed",
+        format="%.2f",
+    )
 
-    if aplicar:
+    if c5.button("Aplicar", key=f"ap_{nombre}", use_container_width=True):
+        # Si delta=0, no hacemos nada (evita clics accidentales)
         if float(delta) != 0.0:
             upsert_estado(nombre, estado + float(delta))
         st.rerun()
@@ -183,7 +149,7 @@ for _, row in df.iterrows():
 
 st.divider()
 
-# ---- Agregar persona ----
+# agregar persona
 st.subheader("Agregar persona")
 a1, a2, a3 = st.columns([3, 2, 2])
 nuevo = a1.text_input("Nombre nuevo", placeholder="Ej: Juan")
