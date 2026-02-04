@@ -123,14 +123,20 @@ for i in range(len(df)):
     c1.write(nombre)
 
     if estado > 0:
-        c2.markdown(f"<span style='color:#16a34a; font-weight:700;'>{estado:.2f}</span>",
-                    unsafe_allow_html=True)
+        c2.markdown(
+            f"<span style='color:#16a34a; font-weight:700;'>{estado:.2f}</span>",
+            unsafe_allow_html=True
+        )
     elif estado < 0:
-        c2.markdown(f"<span style='color:#dc2626; font-weight:700;'>{estado:.2f}</span>",
-                    unsafe_allow_html=True)
+        c2.markdown(
+            f"<span style='color:#dc2626; font-weight:700;'>{estado:.2f}</span>",
+            unsafe_allow_html=True
+        )
     else:
-        c2.markdown(f"<span style='color:#6b7280; font-weight:700;'>{estado:.2f}</span>",
-                    unsafe_allow_html=True)
+        c2.markdown(
+            f"<span style='color:#6b7280; font-weight:700;'>{estado:.2f}</span>",
+            unsafe_allow_html=True
+        )
 
     c3.markdown(barra_html(estado, maximo), unsafe_allow_html=True)
 
@@ -144,15 +150,19 @@ for i in range(len(df)):
     )
 
     if c5.button("Aplicar", key=f"ap_{nombre}", use_container_width=True):
-        txt = (delta_txt or "").strip()
-        try:
-            valor = float(txt)
-            nuevo_estado = estado + valor
-            upsert_estado(nombre, nuevo_estado)
-            st.session_state[key_in] = ""
-            st.rerun()
-        except Exception:
-            st.error("Entrada inválida. Usa: 10, -5, 3.5, etc.")
+        # ✅ FIX iOS/Safari: limpia espacios raros y acepta coma decimal
+        txt = (delta_txt or "").strip().replace(",", ".")
+        if not txt:
+            st.warning("Pon un número antes de aplicar.")
+        else:
+            try:
+                valor = float(txt)
+                nuevo_estado = estado + valor
+                upsert_estado(nombre, nuevo_estado)
+                st.session_state[key_in] = ""
+                st.rerun()
+            except ValueError:
+                st.error("Entrada inválida. Usa: 10, -5, 3.5, etc.")
 
     if c6.button("Borrar", key=f"del_{nombre}", use_container_width=True):
         delete_nombre(nombre)
