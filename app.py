@@ -6,6 +6,7 @@ DB = "estadoshp.db"
 
 st.set_page_config(page_title="Dashboard Proporcional", layout="wide")
 
+
 # ---------- DB ----------
 def conn_db():
     return sqlite3.connect(DB, check_same_thread=False)
@@ -30,7 +31,8 @@ def cargar_df():
         )
     if df.empty:
         df = pd.DataFrame(columns=["Nombre", "Estado"])
-    df["Estado"] = pd.to_numeric(df["Estado"], errors="coerce").fillna(0.0)
+    df["Nombre"] = df["Nombre"].astype(str)
+    df["Estado"] = pd.to_numeric(df["Estado"], errors="coerce").fillna(0.0).astype(float)
     return df.sort_values(by="Estado", ascending=False).reset_index(drop=True)
 
 def upsert_estado(nombre, estado):
@@ -55,9 +57,11 @@ def reset_all():
         cur.execute("UPDATE estados SET estado=0")
         conn.commit()
 
+
 # ---------- UI helpers ----------
 def barra_html(estado, maximo):
-    pct = 0 if maximo == 0 else max(0, min(estado / maximo, 1))
+    # proporcional al máximo (igual que tu lógica original)
+    pct = 0.0 if maximo == 0 else max(0.0, min(estado / maximo, 1.0))
     width = int(pct * 100)
 
     if estado > 0:
@@ -68,29 +72,34 @@ def barra_html(estado, maximo):
         color = "#9ca3af"
 
     return f"""
-    <div style="width:180px;height:14px;border:1px solid #d1d5db;border-radius:4px;">
-        <div style="width:{width}%;height:100%;background:{color};border-radius:4px;"></div>
+    <div style="width:180px;height:14px;border:1px solid #d1d5db;border-radius:4px;background:#fff;">
+      <div style="width:{width}%;height:100%;background:{color};border-radius:4px;"></div>
     </div>
     """
+
 
 # ---------- START ----------
 init_db()
 
 st.title("Dashboard Proporcional (SQLite)")
 
-c1, c2, c3 = st.columns([1.2, 1.6, 4])
-if c1.button("🔄 Recargar"):
-    st.rerun()
-if c2.button("🧽 Reset (todo en 0)"):
-    reset_all()
-    st.rerun()
-c3.caption(f"Base de datos: {DB}")
+t1, t2, t3 = st.columns([1.2, 1.6, 4])
+with t1:
+    if st.button("🔄 Recargar", use_container_width=True):
+        st.rerun()
+with t2:
+    if st.button("🧽 Reset (todo en 0)", use_container_width=True):
+        reset_all()
+        st.rerun()
+with t3:
+    st.caption(f"Base de datos: {DB}")
 
 st.divider()
 
 df = cargar_df()
-maximo = df["Estado"].max() if len(df) else 0
+maximo = float(df["Estado"].max()) if len(df) else 0.0
 
+# encabezados
 h = st.columns([2.2, 1.2, 2.2, 2.2, 1.2, 1.2])
 h[0].markdown("**Nombre**")
 h[1].markdown("**Estado**")
@@ -99,47 +108,57 @@ h[3].markdown("**Sumar / restar**")
 h[4].markdown("**Aplicar**")
 h[5].markdown("**Borrar**")
 
+st.write("")
+
+# filas
 for _, row in df.iterrows():
     nombre = row["Nombre"]
     estado = float(row["Estado"])
 
-    a, b, c, d, e, f = st.columns([2.2, 1.2, 2.2, 2.2, 1.2, 1.2])
+    c1, c2, c3, c4, c5, c6 = st.columns([2.2, 1.2, 2.2, 2.2, 1.2, 1.2])
 
-    a.write(nombre)
+    c1.write(nombre)
 
-    color = "#16a34a" if estado > 0 else "#dc2626" if estado < 0 else "#6b7280"
-    b.markdown(f"<b style='color:{color}'>{estado:.2f}</b>", unsafe_allow_html=True)
-
-    c.markdown(barra_html(estado, maximo), unsafe_allow_html=True)
-
-    delta = d.text_input(
-        "",
-        placeholder="+0",
-        key=f"delta_{nombre}",
-        label_visibility="collapsed"
+    color_num = "#16a34a" if estado > 0 else "#dc2626" if estado < 0 else "#6b7280"
+    c2.markdown(
+        f"<span style='color:{color_num}; font-weight:700;'>{estado:.2f}</span>",
+        unsafe_allow_html=True
     )
 
-    if e.button("Aplicar", key=f"ap_{nombre}"):
-        txt = (delta or "").strip().replace(",", ".")
-        if txt:
-            try:
-                upsert_estado(nombre, estado + float(txt))
-                st.rerun()
-            except ValueError:
-                st.error("Entrada inválida. Usa 10, -5, 3.5")
+    c3.markdown(barra_html(estado, maximo), unsafe_allow_html=True)
 
-    if f.button("Borrar", key=f"del_{nombre}"):
+    # ✅ number_input: teclado numérico real en iOS
+    delta = c4.number_input(
+        "",
+        value=0.0,
+        step=1.0,
+        key=f"delta_{nombre}",
+        label_visibility="collapsed",
+        format="%.2f",
+    )
+
+    if c5.button("Aplicar", key=f"ap_{nombre}", use_container_width=True):
+        # Si delta=0, no hacemos nada (evita clics accidentales)
+        if float(delta) != 0.0:
+            upsert_estado(nombre, estado + float(delta))
+        st.rerun()
+
+    if c6.button("Borrar", key=f"del_{nombre}", use_container_width=True):
         delete_nombre(nombre)
         st.rerun()
 
 st.divider()
 
+# agregar persona
 st.subheader("Agregar persona")
-n1, n2, n3 = st.columns([3, 2, 2])
-nuevo = n1.text_input("Nombre nuevo")
-estado_ini = n2.number_input("Estado inicial", value=0.0)
+a1, a2, a3 = st.columns([3, 2, 2])
+nuevo = a1.text_input("Nombre nuevo", placeholder="Ej: Juan")
+estado_ini = a2.number_input("Estado inicial", value=0.0, step=1.0, format="%.2f")
 
-if n3.button("➕ Agregar"):
-    if nuevo.strip():
-        upsert_estado(nuevo.strip(), estado_ini)
+if a3.button("➕ Agregar", use_container_width=True):
+    n = (nuevo or "").strip()
+    if not n:
+        st.warning("Escribe un nombre.")
+    else:
+        upsert_estado(n, float(estado_ini))
         st.rerun()
