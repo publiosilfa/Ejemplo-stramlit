@@ -97,6 +97,8 @@ with t3:
 st.divider()
 
 df = cargar_df()
+with st.expander("🗄️ Ver base completa (SQLite)"):
+    st.dataframe(df, use_container_width=True)
 maximo = float(df["Estado"].max()) if len(df) else 0.0
 
 # encabezados
