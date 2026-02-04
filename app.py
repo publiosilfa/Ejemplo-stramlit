@@ -114,7 +114,7 @@ for i in range(len(df)):
                 valor = float(txt)
                 st.session_state.df.at[i, "Estado"] = float(st.session_state.df.at[i, "Estado"]) + valor
                 st.session_state.df = ordenar(st.session_state.df)
-                st.session_state[key_in] = ""  # limpia el input
+ #               st.session_state[key_in] = ""  # limpia el input
                 st.rerun()
             except ValueError:
                 st.error("Entrada inválida. Usa algo como 10, -5, 3.5")
